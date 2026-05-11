@@ -1,0 +1,11 @@
+node_modules/
+
+# Session cookies — secrets, must never be committed.
+lib/kayak-cookies.js
+lib/gcal-cookies.js
+# (example files lib/*.example.js ARE committed — they're placeholders only)
+
+# Run artifacts
+*.png
+*.log
+.DS_Store
