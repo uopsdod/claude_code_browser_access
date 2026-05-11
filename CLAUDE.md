@@ -90,7 +90,28 @@ The first run is the smoke test — `check-gcal-month.js` does no writes and tel
 - **Kayak `p1.med.sid`** is a Session cookie — dies when the source browser closes. Re-capture each work session.
 - **Google `__Secure-1PSIDTS` / `__Secure-3PSIDTS`** rotate **~daily**. If yesterday's script redirects to `workspace.google.com/intl/en-US/products/calendar/` today, that's the symptom — re-capture.
 
-### 7. Optional: add a new site
+### 7. Enable the Google Calendar MCP (for calendar writes)
+
+Cookie replay can READ your calendar but Google's OSID defense blocks WRITES (event create/update/delete). For writes, we use Google's official remote Calendar MCP. This is a one-time setup per machine.
+
+```bash
+# The MCP server is already registered in .mcp.json for this project.
+# Authenticate (opens a browser for Google OAuth consent):
+```
+
+In Claude Code, run the slash command:
+
+```
+/mcp
+```
+
+…and pick `claude.ai Google Calendar` → Authenticate. Choose the Google account whose calendar you want to write to. The OAuth token lands in `~/.claude.json` (user-level, never in this repo).
+
+After that, Claude can call `mcp__claude_ai_Google_Calendar__create_event` and friends. Natural-language tasks like "block Jun 21–28 on my calendar for the Spain trip" now work.
+
+Skip this step if you only want calendar reads — those run through cookie replay just fine.
+
+### 8. Optional: add a new site
 
 When you want to extend this to e.g. Notion or Linear:
 
@@ -132,11 +153,12 @@ kayak-probe/
 ├── CLAUDE.md                          ← you are here
 ├── Prompt.md                          ← demo ladder (six progression steps)
 ├── .gitignore                         ← keeps cookie files + node_modules out of git
+├── .mcp.json                          ← registers the google-calendar MCP for calendar writes (no secrets in this file)
 ├── package.json                       ← only dep: playwright
 ├── lib/
 │   ├── playwright-chromium.js         ← launchWithCookies(cookies, opts) → { browser, context, page }
 │   ├── kayak-flows.js                 ← createTrip, findCheapestFlights, saveCheapestToTrip, verifyTrip
-│   ├── gcal-flows.js                  ← loadMonthView, scrapeMonthEvents (READ-ONLY; writes blocked by Google's OSID defense)
+│   ├── gcal-flows.js                  ← loadMonthView, scrapeMonthEvents (READ-ONLY; writes go through the Calendar MCP, not this)
 │   ├── kayak-cookies.example.js       ← committed placeholder; copy → kayak-cookies.js and fill
 │   ├── gcal-cookies.example.js        ← committed placeholder; copy → gcal-cookies.js and fill
 │   ├── kayak-cookies.js               ← YOUR kayak.com cookies (gitignored) — secret, rotates
@@ -144,14 +166,16 @@ kayak-probe/
 ├── trips/
 │   ├── spain-jun21.js                 ← thin driver: Spain Trip Jun 21–28 + cheapest flight
 │   ├── peru-jun10.js                  ← thin driver: Peru Trip Jun 10–17 + cheapest flight
-│   ├── check-gcal-month.js            ← thin driver: scrape gcal month view
-│   (no calendar-write driver — see gcal-flows.js comment)
+│   └── check-gcal-month.js            ← thin driver: scrape gcal month view
 └── .claude/skills/
     ├── get-all-cookies-of-a-site/SKILL.md
     ├── find-out-auth-cookie-of-a-site/SKILL.md
+    ├── set-up-checklist/SKILL.md             ← run this on a fresh clone
     ├── how-to-access-kayak/SKILL.md          ← reference: kayak-specific knowledge
-    └── how-to-access-google-calendar/SKILL.md ← reference: gcal-specific knowledge
+    └── how-to-access-google-calendar/SKILL.md ← reference: gcal reads + MCP for writes
 ```
+
+**Why `.mcp.json` is tracked-in-repo:** it registers Google's official Calendar MCP server (`https://calendarmcp.googleapis.com/mcp/v1`) — just the URL, no tokens. OAuth tokens land in your user-level `~/.claude.json` after the first `/mcp` authenticate, which is per-machine and never enters this repo.
 
 **Naming convention in `lib/`:**
 - `*-flows.js` → reusable Playwright flow primitives for that site (DOM-driving code)

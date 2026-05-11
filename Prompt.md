@@ -88,23 +88,32 @@ Then, add one plane ticket deal to the new trip
 
 ---
 
-## 2.6 — Cross-site automation hits a wall (the honest lesson)
+## 2.6 — Switch tools at the boundary (cookie replay → MCP)
 
-**Goal:** show that the cookie-replay pattern has limits — and what to use when you hit them.
+**Goal:** show what to do when cookie replay hits a wall. End state: trip booked on Kayak via cookie replay AND calendar blocked on Google via an MCP server.
 
-**Tools:** same as 2.5, plus a discussion of why writes to Google Calendar fail.
+**Setup (one-time):**
 
-**The empirical finding:** when we tried to extend step 2.5 with "Then, block my Google Calendar with this plan," cookie-replay fell over. Google's server detects the synthetic session via the OSID sync endpoint and 302s to a marketing page (`workspace.google.com/intl/en-US/products/calendar/`) even though reads from the same cookies work fine. CDP-attach to a real Chrome works but Chrome refuses CDP on the default user-data-dir, requiring a profile clone — too brittle for a template repo.
+1. Register Google's official Calendar MCP server in this project:
+   ```bash
+   claude mcp add --transport http --scope project google-calendar \
+     https://calendarmcp.googleapis.com/mcp/v1
+   ```
+   This creates `.mcp.json` in the repo (no secrets — just the URL).
+2. Authenticate: type `/mcp` in Claude Code, pick `claude.ai Google Calendar`, click through Google's OAuth consent screen, pick the account that owns your `/u/2/r` calendar. Done.
 
-**The right tools when this happens:**
+**Tools used in 2.6:**
+- Playwright + cookies for Kayak (read + write — cookie replay works)
+- Playwright + cookies for Google Calendar (read only — cookie replay works for this)
+- **Google Calendar MCP for the calendar write** (cookie replay was blocked by Google's OSID defense, see "Empirical finding" below)
 
-| Need | Tool |
-|---|---|
-| Programmatic Calendar writes | **Google Calendar API** (OAuth + refresh token) |
-| Conversational Calendar writes from Claude Code | **Calendar MCP server** like `@cocal/google-calendar-mcp` |
-| One-off write | Just do it in the browser |
+**The empirical finding (the lesson behind 2.6):**
 
-**The lesson:** cookie-replay is the right tool for **reads** on almost any logged-in site, and for **writes** on sites with lighter bot defenses (Kayak). Google's anti-bot is tuned to catch exactly this pattern for writes. Don't fight it — switch tools at the boundary where the cost-benefit flips.
+Extending step 2.5 with "Then, block my Google Calendar with this plan" via Playwright failed reproducibly. Google's server detects the synthetic session at the OSID sync endpoint and 302s to `workspace.google.com/intl/en-US/products/calendar/` (marketing page) — even though reads from the same cookies work fine. CDP-attach to a real Chrome would work but modern Chrome refuses CDP on the default user-data-dir, requiring a profile clone. Too brittle.
+
+The Calendar MCP sidesteps all of this. It uses the official Google Calendar API with proper OAuth — no bot detection, no rotating tokens to chase. **One tool call creates the event in ~2 seconds.**
+
+**The reusable principle:** cookie replay is the right tool for **reads** on almost any logged-in site, and for **writes** on sites with lighter bot defenses (Kayak). For sites with strict anti-bot tuned to catch DOM replays (Google products), switch to the API/MCP path at the moment cookie replay starts fighting back.
 
 **What the demo actually does in 2.6:**
 
@@ -121,7 +130,6 @@ Then, create an empty trip on https://www.kayak.com/trips
 Then, check my Google Calendar in next month to see what my schedule is now
 Then, find the cheap plane ticket in my available days
 Then, add one plane ticket deal to the new trip
-
-(For the calendar block, switch to the Google Calendar API or an MCP server
- — DOM-driven writes hit Google's OSID sync defense.)
+Then, block my Google Calendar with this plan
+  (via the google-calendar MCP server registered in .mcp.json — NOT via cookies)
 ```

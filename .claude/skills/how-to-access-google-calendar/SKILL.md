@@ -28,8 +28,8 @@ If you're reading this skill in isolation without that scaffolding, start with `
 
 ## When this skill does NOT apply
 
-- **Any kind of event create / update / delete.** Empirically blocked by Google's OSID sync defense — see "Writes are NOT supported via cookie replay" below. Use the Google Calendar API or a Calendar MCP server instead.
-- Production / unattended jobs — the cookies rotate (see below). API + refresh tokens are the right tool.
+- **Event create / update / delete via cookie replay.** Empirically blocked by Google's OSID sync defense — see "Writes are NOT supported via cookie replay" below. **For writes, use the Calendar MCP** (already registered in this repo's `.mcp.json`; see the write section for the one-command install).
+- Production / unattended jobs — cookies rotate. Use the Calendar API with refresh tokens for those.
 - Multi-user systems — never replay another user's cookies.
 
 ## ⭐ Read-recipe — render a logged-in calendar week
@@ -90,16 +90,42 @@ Expected output on success:
 
 **Writes (event create/update/delete) are intentionally out of scope for this skill.** Earlier attempts to drive the Create-event flow via Playwright + replayed cookies briefly succeeded, but reproducibly fail today: Google's server responds with a 302 to `accounts.google.com/ServiceLogin?service=cl&passive=1209600&osid=1&continue=...` which then bounces to `workspace.google.com/intl/en-US/products/calendar/` (marketing page). The cookies render the calendar fine for reads but the OSID sync rejects writes from the synthetic context.
 
-What works for reads doesn't work for writes here. Don't waste time chasing this — use the right tool:
+What works for reads doesn't work for writes here. Don't waste time chasing this — switch to the official path.
+
+### ✅ Use the Google Calendar MCP for writes (verified working)
+
+This repo's `.mcp.json` already registers Google's official remote Calendar MCP. To enable it on a fresh checkout:
+
+```bash
+# 1. Register (once per project — adds to .mcp.json):
+claude mcp add --transport http --scope project google-calendar \
+  https://calendarmcp.googleapis.com/mcp/v1
+
+# 2. Authenticate (once per machine): in Claude Code, type:
+/mcp
+# pick "claude.ai Google Calendar" → Authenticate → Google OAuth consent
+```
+
+After that, the MCP exposes these tools to Claude Code:
+
+- `mcp__claude_ai_Google_Calendar__list_events` — read events in a range
+- `mcp__claude_ai_Google_Calendar__create_event` — create (one-shot)
+- `mcp__claude_ai_Google_Calendar__update_event` — modify
+- `mcp__claude_ai_Google_Calendar__delete_event` — delete
+- `mcp__claude_ai_Google_Calendar__list_calendars` — multi-calendar
+- plus `suggest_time`, `respond_to_event`, `get_event`
+
+A natural-language ask like "block Jun 21–28 on my calendar for the Spain trip" now does exactly that, in ~2 seconds, no cookie ceremony. Verified end-to-end on 2026-05-11.
+
+### Alternatives (if you can't or won't use the MCP)
 
 | Need | Tool |
 |---|---|
-| One-off event create | Do it manually in the browser, or use the Google Calendar API one-shot |
-| Programmatic event create / update / delete | **Google Calendar API** (`@googleapis/calendar`) with OAuth, or a **Calendar MCP server** like `@cocal/google-calendar-mcp` |
-| Recurring automation | Calendar API + refresh token, or MCP server |
-| Bulk operations | Calendar API `events.batchInsert` etc. |
+| One-off event create | Do it manually in the browser |
+| Local/scripted writes | **Google Calendar API** (`@googleapis/calendar`) with OAuth — you'd own the credentials |
+| Bulk operations | Calendar API `events.batchInsert` |
 
-CDP-attach to a real Chrome (`chromium.connectOverCDP`) does work, but modern Chrome refuses CDP on the default user-data-dir for security reasons — you'd need to clone your profile into `/tmp/chrome-cdp-profile` first. Not worth the per-machine fragility for a template repo.
+CDP-attach to a real Chrome (`chromium.connectOverCDP`) also works, but modern Chrome refuses CDP on the default user-data-dir for security reasons — you'd need to clone your profile into `/tmp/chrome-cdp-profile` first. Not worth the per-machine fragility when the MCP is one command away.
 
 ## Cookie set — which ones are load-bearing
 
