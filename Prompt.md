@@ -7,6 +7,8 @@ Each step has a **copy-paste prompt** for the live demo. Run them in order; each
 > **Live-demo note:** the live destination (Tokyo, Spain, Italy, …) is intentionally rotated between runs so cached answers don't muddy the demo. Pick one your audience hasn't seen.
 
 ---
+## 2.0 — Run set-up-checklist command 
+Check whether required libraries are all installed 
 
 ## 2.1 — WebFetch (HTML only, no JS)
 
@@ -58,29 +60,39 @@ Report the top 3 cheapest results: airline, price, duration, number of stops.
 
 ---
 
-## 2.3 — Playwright MCP + auth cookies (user-specific data)
+## 2.3 — Node Playwright + auth cookies (user-specific data)
 
 **Goal:** access data only available when signed in.
 
 **Target:** <https://www.kayak.com/trips>
 
-**Tools:** Playwright MCP + replayed auth cookies (from `lib/kayak-cookies.js`)
+**Tools:** **Node Playwright** (NOT the MCP) + replayed auth cookies in `lib/kayak-cookies.js`
+
+**Why not the MCP?** The Playwright MCP can only set cookies via `document.cookie` from inside the page, which by browser design **cannot set HttpOnly cookies**. Kayak's auth (`p1.med.sid`, `kayak.mc`, `p1.med.stoken`, `mtoken.*`, etc.) is all HttpOnly, so MCP injection lands on the signed-out "Sign in to plan your trip" page. The Node path uses Playwright's `context.addCookies()`, which CAN set HttpOnly — that's the actual unlock from 2.2 → 2.3, not the MCP.
 
 **What you'll see:** the user's actual saved trips (whatever's currently on /trips).
 
 ### Prompt to paste
 
 ```
-Use Playwright with the cookies in lib/kayak-cookies.js to load
-https://www.kayak.com/trips
+I'll paste my Kayak cookies (DevTools → Application → Cookies, full table)
+here. Consult the how-to-access-kayak skill — Rule #1 says do NOT use the
+Playwright MCP for this, because it can't set HttpOnly cookies and Kayak's
+auth cookies are all HttpOnly. Use the Node Playwright path instead:
 
-Report:
-  - What URL you actually land on (sign-in redirect or the trip list?)
-  - The trips currently saved in my account (name + dates of each)
-  - The count of upcoming vs past trips
+  1. Transcribe my paste into lib/kayak-cookies.js (shape: see
+     lib/kayak-cookies.example.js — name, value, domain, path, httpOnly,
+     secure, sameSite). Overwrite the file.
+  2. Write a driver at trips/list-trips.js that requires
+     lib/playwright-chromium + lib/kayak-cookies, calls launchWithCookies()
+     (which wraps context.addCookies()), navigates to
+     https://www.kayak.com/trips, waits ~8s for hydration, and scrapes the
+     trip cards.
+  3. Run `node trips/list-trips.js` and report the trips currently saved in
+     my account.
 ```
 
-**Expected punchline:** "We see *your* trips by name — Peru Trip, Italy Trip, etc. — proving the session cookies authenticated us. Without cookies, this same URL would show 'Sign in to plan your trip'."
+**Expected punchline:** "We see *your* trips by name — Peru Trip, Italy Trip, etc. — proving the session cookies authenticated us. Without cookies, this same URL shows 'Sign in to plan your trip'. The real lift here isn't Playwright vs. WebFetch — it's the Node API's `addCookies()`, the only path that can carry HttpOnly auth into a fresh browser context."
 
 ---
 

@@ -14,3 +14,5 @@ trips/*.js
 *.png
 *.log
 .DS_Store
+
+.playwright-mcp/

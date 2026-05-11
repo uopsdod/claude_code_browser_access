@@ -24,6 +24,28 @@ If you're reading this skill in isolation without that scaffolding, start with `
 - Creating or modifying a trip via Playwright
 - Any kayak.com automation that needs to "act like a logged-in human"
 
+## ⚠️ Rule #1 — Never inject Kayak cookies via the Playwright MCP
+
+The Playwright **MCP** only lets you set cookies through `document.cookie` in `browser_evaluate`. By browser design, `document.cookie` **cannot set HttpOnly cookies** — and every load-bearing Kayak auth cookie is HttpOnly: `p1.med.sid`, `kayak.mc`, `Apache`, `p1.med.stoken`, `p1.med.token`, `kmkid`, `mtoken.*`. The MCP path will navigate fine, but `/trips` will render the signed-out "Sign in to plan your trip" landing page. This was verified empirically on 2026-05-11 and is not worth re-attempting.
+
+**When the user pastes Kayak cookies in chat, do this instead:**
+
+1. **Transcribe** the pasted DevTools table into `lib/kayak-cookies.js` — same shape as `lib/kayak-cookies.example.js` (fields: `name`, `value`, `domain`, `path`, `httpOnly`, `secure`, `sameSite`). Trust the HttpOnly / Secure / SameSite columns from DevTools verbatim. Overwrite the file.
+2. **Write a small driver** at `trips/<name>.js` that does:
+   ```javascript
+   const { launchWithCookies } = require('../lib/playwright-chromium');
+   const cookies = require('../lib/kayak-cookies');
+   (async () => {
+     const { browser, page } = await launchWithCookies(cookies);
+     // ... navigate, scrape, close ...
+     await browser.close();
+   })();
+   ```
+   `launchWithCookies` wraps `context.addCookies()`, which DOES set HttpOnly.
+3. **Run** with `node trips/<name>.js`.
+
+The Playwright MCP is still the right tool for **anonymous** Kayak access (e.g. step 2.2 of the demo ladder — flight search by URL with no cookies). Reserve MCP for stateless reads; reserve the Node path for anything authenticated.
+
 ## ⭐ End-to-end recipe — create a Trip + attach the cheapest flight
 
 This is the "find a cheap ticket from X to Y for date D and put it in a new trip" flow, distilled from a verified working session. Use this template; only the destination, dates, and trip name should change.
