@@ -1,4 +1,5 @@
 # Kayak-probe → universal-site-probe
+- github repo: https://github.com/uopsdod/claude_code_browser_access
 
 ## What this project is
 
