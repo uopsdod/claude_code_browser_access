@@ -5,6 +5,11 @@ lib/kayak-cookies.js
 lib/gcal-cookies.js
 # (example files lib/*.example.js ARE committed — they're placeholders only)
 
+# Per-demo trip drivers — ephemeral, don't accumulate in git history.
+# (example files trips/*.example.js ARE committed — copy them to make your own.)
+trips/*.js
+!trips/*.example.js
+
 # Run artifacts
 *.png
 *.log

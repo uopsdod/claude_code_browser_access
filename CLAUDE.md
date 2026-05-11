@@ -78,12 +78,12 @@ Both `kayak-cookies.js` and `gcal-cookies.js` are `.gitignore`d — they're per-
 ### 5. Run a script
 
 ```bash
-node trips/check-gcal-month.js     # read-only: scrape your June calendar
-node trips/spain-jun21.js          # write: create a trip + attach cheapest flight
+node trips/check-gcal-month.example.js     # read-only: scrape your June calendar
+node trips/spain-jun21.example.js          # write: create a trip + attach cheapest flight
 // (calendar writes NOT supported — see how-to-access-google-calendar skill)
 ```
 
-The first run is the smoke test — `check-gcal-month.js` does no writes and tells you whether your gcal cookies are good. If it prints "Cookies expired or wrong page", re-capture (step 3).
+The first run is the smoke test — `check-gcal-month.example.js` does no writes and tells you whether your gcal cookies are good. If it prints "Cookies expired or wrong page", re-capture (step 3).
 
 ### 6. Cookie rotation — re-capture often
 
@@ -164,9 +164,9 @@ kayak-probe/
 │   ├── kayak-cookies.js               ← YOUR kayak.com cookies (gitignored) — secret, rotates
 │   └── gcal-cookies.js                ← YOUR calendar.google.com cookies (gitignored) — SIDTS rotates daily
 ├── trips/
-│   ├── spain-jun21.js                 ← thin driver: Spain Trip Jun 21–28 + cheapest flight
-│   ├── peru-jun10.js                  ← thin driver: Peru Trip Jun 10–17 + cheapest flight
-│   └── check-gcal-month.js            ← thin driver: scrape gcal month view
+│   ├── spain-jun21.example.js         ← TRACKED template: Kayak end-to-end. Copy → spain-jun21.js to run.
+│   └── check-gcal-month.example.js    ← TRACKED template: gcal read. Copy → check-gcal-month.js to run.
+│   (trips/*.js is gitignored — your per-demo drivers stay local; only *.example.js is tracked)
 └── .claude/skills/
     ├── get-all-cookies-of-a-site/SKILL.md
     ├── find-out-auth-cookie-of-a-site/SKILL.md
@@ -186,12 +186,22 @@ Yes, the cookie files live in `lib/` alongside the flow code. That's a pragmatic
 
 Each `trips/*.js` is a 10–30 line driver: import lib, define a TRIP/EVENT config object, call the lib functions in order. Site mechanics (selectors, timeouts, gotchas) all live in `lib/`. When a site's UI changes, you fix it once in `lib/` and every driver benefits.
 
+**Drivers are ephemeral by convention.** Only the two `*.example.js` files are tracked in git as reference templates. Per-demo drivers (`trips/tokyo-aug15.js`, etc.) are gitignored — copy an example, change the config, run, delete or keep locally. The repo doesn't accumulate one-off trip files in history.
+
 ### Adding a new trip / event
 
-Copy a driver from `trips/`, change the config object, run. Example for a new Tokyo trip:
+Copy one of the tracked `.example.js` files in `trips/`, change the config object, run. The new file will be gitignored by default. Example for a new Tokyo trip:
+
+```bash
+cp trips/spain-jun21.example.js trips/tokyo-aug15.js
+# edit the config in your new file, then:
+node trips/tokyo-aug15.js
+```
+
+The new file's body looks like:
 
 ```javascript
-// trips/tokyo-aug15.js
+// trips/tokyo-aug15.js  (gitignored — local only)
 const { launchWithCookies } = require('../lib/playwright-chromium');
 const { createTripAndAttachCheapest, verifyTrip } = require('../lib/kayak-flows');
 const cookies = require('../lib/kayak-cookies');
