@@ -1,5 +1,15 @@
-// trips/spain-jun21.js — Spain Trip Jun 21–28 + cheapest TPE→MAD on Jun 23 attached.
-// Replaces: add-spain-trip-jun21.js + save-cheapest-jun23.js
+// trips/kayak-trip.example.js — TEMPLATE for Kayak end-to-end flow.
+// Copy this to trips/<your-dest>-<your-date>.js, edit the TRIP config block,
+// and run with `node trips/<your-dest>-<your-date>.js`.
+//
+// What this does:
+//   1. Creates an empty trip on /trips
+//   2. Searches TPE → <destIata> on `depart` date, sort=price_a
+//   3. Saves the cheapest organic flight card to the trip
+//   4. Verifies the trip page shows "1 saved item"
+//
+// The current config values (Spain, Madrid, Jun 21-28) are just an example;
+// change them to whatever destination/dates you want.
 const { launchWithCookies } = require('../lib/playwright-chromium');
 const { createTrip, findCheapestFlights, saveCheapestToTrip, verifyTrip } = require('../lib/kayak-flows');
 const cookies = require('../lib/kayak-cookies');

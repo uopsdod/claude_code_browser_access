@@ -1,5 +1,9 @@
-// trips/check-gcal-month.js — read events for a month on calendar.google.com.
-// Replaces: read-gcal-june.js
+// trips/check-gcal-month.example.js — TEMPLATE for scraping a Google Calendar month view.
+// Copy this to trips/<your-name>.js, edit the CFG block (account/year/month),
+// and run with `node trips/<your-name>.js`.
+//
+// This is the recommended SMOKE TEST after capturing gcal cookies — it does
+// no writes and tells you whether your session is authenticated.
 const { launchWithCookies } = require('../lib/playwright-chromium');
 const { loadMonthView, scrapeMonthEvents } = require('../lib/gcal-flows');
 const cookies = require('../lib/gcal-cookies');

@@ -79,7 +79,7 @@ Both `kayak-cookies.js` and `gcal-cookies.js` are `.gitignore`d — they're per-
 
 ```bash
 node trips/check-gcal-month.example.js     # read-only: scrape your June calendar
-node trips/spain-jun21.example.js          # write: create a trip + attach cheapest flight
+node trips/kayak-trip.example.js           # write: create a trip + attach cheapest flight
 // (calendar writes NOT supported — see how-to-access-google-calendar skill)
 ```
 
@@ -164,7 +164,7 @@ kayak-probe/
 │   ├── kayak-cookies.js               ← YOUR kayak.com cookies (gitignored) — secret, rotates
 │   └── gcal-cookies.js                ← YOUR calendar.google.com cookies (gitignored) — SIDTS rotates daily
 ├── trips/
-│   ├── spain-jun21.example.js         ← TRACKED template: Kayak end-to-end. Copy → spain-jun21.js to run.
+│   ├── kayak-trip.example.js          ← TRACKED template: Kayak end-to-end (create trip + cheapest flight). Copy → <name>.js to run.
 │   └── check-gcal-month.example.js    ← TRACKED template: gcal read. Copy → check-gcal-month.js to run.
 │   (trips/*.js is gitignored — your per-demo drivers stay local; only *.example.js is tracked)
 └── .claude/skills/
@@ -193,7 +193,7 @@ Each `trips/*.js` is a 10–30 line driver: import lib, define a TRIP/EVENT conf
 Copy one of the tracked `.example.js` files in `trips/`, change the config object, run. The new file will be gitignored by default. Example for a new Tokyo trip:
 
 ```bash
-cp trips/spain-jun21.example.js trips/tokyo-aug15.js
+cp trips/kayak-trip.example.js trips/tokyo-aug15.js
 # edit the config in your new file, then:
 node trips/tokyo-aug15.js
 ```

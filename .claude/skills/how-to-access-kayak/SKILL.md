@@ -13,7 +13,7 @@ This skill assumes the project layout described in `CLAUDE.md` at the repo root.
 
 - Node.js + Playwright installed (`npm install && npx playwright install chromium`)
 - A `lib/kayak-cookies.js` file with values captured from a signed-in Kayak session — see the `get-all-cookies-of-a-site` skill for capture steps and `lib/kayak-cookies.example.js` for the shape
-- Drivers run from the repo root: `node trips/spain-jun21.js`
+- Drivers run from the repo root: copy `trips/kayak-trip.example.js` → `trips/<your-name>.js`, edit the config, then `node trips/<your-name>.js`
 
 If you're reading this skill in isolation without that scaffolding, start with `CLAUDE.md` first.
 

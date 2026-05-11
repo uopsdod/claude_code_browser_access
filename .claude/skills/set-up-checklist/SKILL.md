@@ -57,7 +57,7 @@ The repo ships flows for two sites:
 - **kayak.com** — flight search + trip list (read & write)
 - **calendar.google.com** — calendar reads + one-shot event creation (read & write)
 
-Ask the user which they need. They don't have to set up both. The drivers under `trips/` are independent — `trips/check-gcal-month.js` only needs gcal cookies, `trips/spain-jun21.js` only needs kayak cookies.
+Ask the user which they need. They don't have to set up both. The drivers under `trips/` are independent — `trips/check-gcal-month.example.js` only needs gcal cookies, `trips/kayak-trip.example.js` only needs kayak cookies.
 
 ## Section 4 — Sign in to each chosen site
 
@@ -108,7 +108,7 @@ Have the user run the cheapest, most-passive driver first:
 node trips/check-gcal-month.js
 ```
 
-(or `trips/spain-jun21.js` if they only enabled Kayak — but that's a write flow; the gcal read is safer as a first run.)
+(or `trips/kayak-trip.example.js` if they only enabled Kayak — but that's a write flow; the gcal read is safer as a first run.)
 
 **Expected output on success:** prints `Loaded: { ..., looksLikeCalendar: true, email: 'Google Account: ... (your@email.com)' }` followed by event titles for the month.
 
