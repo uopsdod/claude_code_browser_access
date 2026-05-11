@@ -88,13 +88,25 @@ Then, add one plane ticket deal to the new trip
 
 ---
 
-## 2.6 — Two sites + write to both (closing the loop)
+## 2.6 — Cross-site automation hits a wall (the honest lesson)
 
-**Goal:** full read-and-write across both sites. End state: trip booked on Kayak AND calendar blocked on Google.
+**Goal:** show that the cookie-replay pattern has limits — and what to use when you hit them.
 
-**Tools:** Playwright MCP + auth cookies for both sites + DOM write actions on Google Calendar
+**Tools:** same as 2.5, plus a discussion of why writes to Google Calendar fail.
 
-**Sample prompt:**
+**The empirical finding:** when we tried to extend step 2.5 with "Then, block my Google Calendar with this plan," cookie-replay fell over. Google's server detects the synthetic session via the OSID sync endpoint and 302s to a marketing page (`workspace.google.com/intl/en-US/products/calendar/`) even though reads from the same cookies work fine. CDP-attach to a real Chrome works but Chrome refuses CDP on the default user-data-dir, requiring a profile clone — too brittle for a template repo.
+
+**The right tools when this happens:**
+
+| Need | Tool |
+|---|---|
+| Programmatic Calendar writes | **Google Calendar API** (OAuth + refresh token) |
+| Conversational Calendar writes from Claude Code | **Calendar MCP server** like `@cocal/google-calendar-mcp` |
+| One-off write | Just do it in the browser |
+
+**The lesson:** cookie-replay is the right tool for **reads** on almost any logged-in site, and for **writes** on sites with lighter bot defenses (Kayak). Google's anti-bot is tuned to catch exactly this pattern for writes. Don't fight it — switch tools at the boundary where the cost-benefit flips.
+
+**What the demo actually does in 2.6:**
 
 ```
 Now, help me find a cheap plane ticket from Taipei to Spain in next month
@@ -109,5 +121,7 @@ Then, create an empty trip on https://www.kayak.com/trips
 Then, check my Google Calendar in next month to see what my schedule is now
 Then, find the cheap plane ticket in my available days
 Then, add one plane ticket deal to the new trip
-Then, block my Google Calendar with this plan
+
+(For the calendar block, switch to the Google Calendar API or an MCP server
+ — DOM-driven writes hit Google's OSID sync defense.)
 ```

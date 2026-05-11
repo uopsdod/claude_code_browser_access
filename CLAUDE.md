@@ -49,6 +49,19 @@ For each site you want to use:
    - Select all rows + Cmd/Ctrl+C
 4. Paste the rows to Claude Code or transcribe into the cookie file
 
+> ⚠️ **DevTools cookie table virtualizes rows** — and that breaks Cmd+A in newer Chrome/Edge builds. If your paste is missing the cookies you can see in the table (e.g. you see `p1.med.sid` in DevTools but it's not in your paste), use the **resize + scroll trick** instead:
+>
+> 1. **Maximize the DevTools panel** — drag the splitter up, or undock DevTools into its own window (the three-dot menu → "Dock side" → "Undock"). The taller the panel, the more rows render at once.
+> 2. **Make the cookie table as tall as possible** so as many rows as possible are visible without scrolling.
+> 3. **Scroll the cookie table to the top.**
+> 4. **Click the first row**, then **Shift+Click the last row** (do NOT use Cmd+A — Shift-click forces a render across the virtualized range that Cmd+A skips).
+> 5. **Cmd+C** to copy, paste here.
+> 6. If the table is still longer than your panel, do it in 2–3 chunks (scroll, click, shift-click last visible, copy; scroll more, repeat) and paste each chunk — Claude can dedupe across pastes.
+>
+> Symptom that you hit the virtualization bug: your paste has only the visible rows from the moment you clicked, and the cookies that scrolled off-screen are missing.
+>
+> Alternative if this keeps biting: install the open-source [Cookie-Editor](https://cookie-editor.com/) extension and use its "Export → JSON" — it bypasses the virtualization entirely.
+
 ### 4. Create the cookie files
 
 The repo ships example placeholder files:
@@ -67,7 +80,7 @@ Both `kayak-cookies.js` and `gcal-cookies.js` are `.gitignore`d — they're per-
 ```bash
 node trips/check-gcal-month.js     # read-only: scrape your June calendar
 node trips/spain-jun21.js          # write: create a trip + attach cheapest flight
-node trips/block-gcal-spain.js     # write: create an all-day calendar event
+// (calendar writes NOT supported — see how-to-access-google-calendar skill)
 ```
 
 The first run is the smoke test — `check-gcal-month.js` does no writes and tells you whether your gcal cookies are good. If it prints "Cookies expired or wrong page", re-capture (step 3).
@@ -123,7 +136,7 @@ kayak-probe/
 ├── lib/
 │   ├── playwright-chromium.js         ← launchWithCookies(cookies, opts) → { browser, context, page }
 │   ├── kayak-flows.js                 ← createTrip, findCheapestFlights, saveCheapestToTrip, verifyTrip
-│   ├── gcal-flows.js                  ← loadMonthView, scrapeMonthEvents, createAllDayEvent, verifyEvent
+│   ├── gcal-flows.js                  ← loadMonthView, scrapeMonthEvents (READ-ONLY; writes blocked by Google's OSID defense)
 │   ├── kayak-cookies.example.js       ← committed placeholder; copy → kayak-cookies.js and fill
 │   ├── gcal-cookies.example.js        ← committed placeholder; copy → gcal-cookies.js and fill
 │   ├── kayak-cookies.js               ← YOUR kayak.com cookies (gitignored) — secret, rotates
@@ -132,7 +145,7 @@ kayak-probe/
 │   ├── spain-jun21.js                 ← thin driver: Spain Trip Jun 21–28 + cheapest flight
 │   ├── peru-jun10.js                  ← thin driver: Peru Trip Jun 10–17 + cheapest flight
 │   ├── check-gcal-month.js            ← thin driver: scrape gcal month view
-│   └── block-gcal-spain.js            ← thin driver: create gcal all-day event
+│   (no calendar-write driver — see gcal-flows.js comment)
 └── .claude/skills/
     ├── get-all-cookies-of-a-site/SKILL.md
     ├── find-out-auth-cookie-of-a-site/SKILL.md
@@ -206,11 +219,8 @@ These all turned into entries in the respective skill files; listing here so you
 - **Kayak:** End date must be ≥ Start + 7 days, or the POST silently 200's
 - **Kayak:** the first flight result is often a sponsored Ad row; filter on absence of "Ad disclaimer" in card text
 - **Kayak:** `aria-label="Save"` appears on every card — must scope to your chosen card, not `.first()`
-- **Google Calendar:** the Create button has no `aria-label`, only inner text `"add Create"` (icon + label)
-- **Google Calendar:** the full editor uses `input[aria-label="Title"]` — NOT `"Add title"` (that's the popup's placeholder)
-- **Google Calendar:** `Description` is `div[role="textbox"]`, not `<input>` — type after click, don't `.fill()`
-- **Google Calendar:** keyboard shortcut `c` jumps to `/eventedit` and bypasses the flaky quick-create popup entirely
-- **Both:** cookies expire mid-session; symptoms are different per site (Kayak shows "Sign in", Google redirects to `workspace.google.com` marketing page)
+- **Google Calendar:** writes via cookie replay are blocked by Google's OSID sync — the server 302s synthetic sessions to `workspace.google.com` marketing page even though reads work fine. Use the Calendar API or an MCP server for writes.
+- **Both:** cookies expire mid-session; symptoms differ per site (Kayak shows "Sign in", Google redirects to `workspace.google.com` marketing page)
 
 ## Skills inventory
 
@@ -220,6 +230,6 @@ These all turned into entries in the respective skill files; listing here so you
 | `get-all-cookies-of-a-site` | How to capture all cookies (including HttpOnly) via DevTools. Invoked by `set-up-checklist` Section 5. | Stable |
 | `find-out-auth-cookie-of-a-site` | Identify the minimum-viable auth cookie subset by probing. Optional optimization. | Stable |
 | `how-to-access-kayak` | Reference impl for kayak.com — read trips, create trip, save flight | Verified end-to-end |
-| `how-to-access-google-calendar` | Reference impl for calendar.google.com — read events, create event | Verified end-to-end (write recipe added 2026-05-10) |
+| `how-to-access-google-calendar` | Reference impl for calendar.google.com — **READS ONLY**. Writes blocked by Google's OSID sync defense; use Calendar API or MCP server for those. | Verified for reads |
 
 When you add a new site (e.g. `gmail.com`, `notion.so`, `linear.app`), create a new `how-to-access-<site>` skill. Copy `how-to-access-kayak` as the template — it has the cleanest structure.

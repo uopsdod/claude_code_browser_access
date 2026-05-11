@@ -55,8 +55,27 @@ This is the default. It works in Chrome, Edge, Brave, Arc, and other Chromium br
 
 **5. Copy the data.** Three options, depending on what the user needs:
 - **Screenshot the table** — simplest, captures all flags visually.
-- **Select all rows + Cmd/Ctrl+C** — pastes as tab-separated rows.
+- **Select all rows + Cmd/Ctrl+C** — pastes as tab-separated rows. ⚠️ **Has a known bug** — see below.
 - **Right-click a row → "Copy as cURL"** (Network tab, on any request) — gives a curl command with the Cookie header pre-filled. Useful for one-off API calls.
+
+### ⚠️ Cmd+A virtualization bug (read this if your paste is missing rows)
+
+Newer Chrome/Edge builds **virtualize the cookies table** for performance — only the rows currently painted in the viewport actually exist in the DOM at any moment. So `Cmd+A → Cmd+C` only copies what's visible **at that exact scroll position**, not all rows. If you have 24 cookies but only 10 fit on screen, you get 10 in the clipboard. Silent data loss, no error.
+
+**Symptom:** your paste has the cookies that were on screen when you copied, and is missing the ones that scrolled off (above or below). Often the auth cookie you actually need is in the missing chunk.
+
+**The resize + Shift+Click workaround:**
+
+1. **Maximize the DevTools panel** — drag the splitter up, or undock into its own window via three-dot menu → "Dock side" → "Undock into separate window." Maximize that window.
+2. **Resize the cookie table** to be as tall as possible (drag column headers or panel splitters).
+3. **Scroll the cookie table to the very top.**
+4. **Click the first row** (single-click, don't Cmd+A).
+5. **Scroll down slowly to the bottom row, then Shift+Click it.** Shift-click forces the virtualized rows in between to render and be included in the selection. Cmd+A doesn't do this.
+6. **Cmd+C** → paste.
+
+If the table is still longer than the maximized panel allows, do it in chunks: select the top half, copy, paste; scroll down, select the bottom half, copy, paste. Dedupe by name afterwards.
+
+**Alternative — Cookie-Editor extension.** Install [Cookie-Editor](https://cookie-editor.com/) (open source, ~5M installs). Click the extension icon → "Export" → "Export as JSON". It uses the privileged `chrome.cookies` API directly and sees every cookie in one shot, no virtualization issues. Recommended if you'll be capturing cookies more than a couple times.
 
 **6. Sanity-check.** Confirm the table shows:
 - The full count of cookies (typically 10–30 for a logged-in user, much fewer for anonymous).

@@ -28,11 +28,9 @@ If you're reading this skill in isolation without that scaffolding, start with `
 
 ## When this skill does NOT apply
 
+- **Any kind of event create / update / delete.** Empirically blocked by Google's OSID sync defense — see "Writes are NOT supported via cookie replay" below. Use the Google Calendar API or a Calendar MCP server instead.
 - Production / unattended jobs — the cookies rotate (see below). API + refresh tokens are the right tool.
 - Multi-user systems — never replay another user's cookies.
-- Recurring/large-batch event creation — use the **Google Calendar API** or a **Calendar MCP server** (e.g. `@cocal/google-calendar-mcp`). DOM-driven writes work (see write-recipe below) but each click adds bot-risk; don't loop them.
-
-**Note on DOM writes:** Earlier versions of this skill warned that DOM-driven writes were dangerous and likely to fail. **That was overstated.** A single-shot, careful create-event flow has been verified end-to-end without any bot challenge or session invalidation. The write-recipe below works. The caveats still apply: don't batch, don't loop, don't drive writes if a clean API path exists.
 
 ## ⭐ Read-recipe — render a logged-in calendar week
 
@@ -88,138 +86,20 @@ Expected output on success:
 }
 ```
 
-## ⭐ Write-recipe — create an all-day event (verified working)
+## Writes are NOT supported via cookie replay
 
-This was thought to be dangerous; it is not, as long as you're single-shot and careful. Single create-event run completed cleanly with the cookie set, no CAPTCHA, no session invalidation. The key was using the **keyboard shortcut `c`** to jump straight to `/eventedit` and skipping the flaky quick-create popup entirely.
+**Writes (event create/update/delete) are intentionally out of scope for this skill.** Earlier attempts to drive the Create-event flow via Playwright + replayed cookies briefly succeeded, but reproducibly fail today: Google's server responds with a 302 to `accounts.google.com/ServiceLogin?service=cl&passive=1209600&osid=1&continue=...` which then bounces to `workspace.google.com/intl/en-US/products/calendar/` (marketing page). The cookies render the calendar fine for reads but the OSID sync rejects writes from the synthetic context.
 
-```javascript
-// block-event.js — create an all-day event for a date range.
-const { chromium } = require('playwright');
-const cookies = require('./gcal-cookies.js');
+What works for reads doesn't work for writes here. Don't waste time chasing this — use the right tool:
 
-const EVENT_TITLE = 'Spain Trip (TPE → MAD)';
-const START_TEXT  = 'Jun 21, 2026';   // format the editor accepts: "Mmm D, YYYY"
-const END_TEXT    = 'Jun 28, 2026';
-const DESCRIPTION = 'Optional notes…';
+| Need | Tool |
+|---|---|
+| One-off event create | Do it manually in the browser, or use the Google Calendar API one-shot |
+| Programmatic event create / update / delete | **Google Calendar API** (`@googleapis/calendar`) with OAuth, or a **Calendar MCP server** like `@cocal/google-calendar-mcp` |
+| Recurring automation | Calendar API + refresh token, or MCP server |
+| Bulk operations | Calendar API `events.batchInsert` etc. |
 
-(async () => {
-  const browser = await chromium.launch({ channel: 'chromium', headless: false });
-  const context = await browser.newContext({
-    userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-    viewport: { width: 1440, height: 900 }, locale: 'en-US',
-  });
-  await context.addCookies(cookies);
-  const page = await context.newPage();
-
-  // 1) Land on a month view so the keyboard shortcut is available.
-  await page.goto('https://calendar.google.com/calendar/u/2/r/month/2026/6/1', { waitUntil: 'domcontentloaded' });
-  await page.waitForTimeout(10_000);
-  if (!/calendar\.google\.com\/calendar\/u\/\d+\/r/.test(page.url())) {
-    throw new Error('Cookies expired — page redirected away.');
-  }
-
-  // 2) Press "c" → opens full event editor at /eventedit?overrides=...
-  await page.keyboard.press('c');
-  await page.waitForTimeout(6000);
-  if (!/eventedit/.test(page.url())) throw new Error('Editor did not open.');
-
-  // 3) Fill title. SELECTOR: input[aria-label="Title"] (NOT "Add title").
-  await page.locator('input[aria-label="Title"]').first().fill(EVENT_TITLE);
-  await page.waitForTimeout(600);
-
-  // 4) Toggle "All day". SELECTOR: input[type="checkbox"][aria-label="All day"].
-  //    Check current state with isChecked() — clicking when already on flips it off.
-  const allDay = page.locator('input[type="checkbox"][aria-label="All day"]').first();
-  if (!(await allDay.isChecked())) {
-    await allDay.click();
-    await page.waitForTimeout(1500);
-  }
-
-  // 5) Set dates. The Start/End date fields are plain text <input>s. Triple-click
-  //    to select all, type new date, Tab to commit. Accepts "Mmm D, YYYY".
-  for (const [label, value] of [['Start date', START_TEXT], ['End date', END_TEXT]]) {
-    const inp = page.locator(`input[aria-label="${label}"]`).first();
-    await inp.click({ clickCount: 3 });
-    await page.waitForTimeout(200);
-    await page.keyboard.type(value, { delay: 60 });
-    await page.keyboard.press('Tab');
-    await page.waitForTimeout(1500);
-  }
-
-  // 6) Description (optional). aria-label="Description" — note it's a div[role="textbox"], not <input>.
-  const desc = page.locator('[aria-label="Description"]').first();
-  if (DESCRIPTION && await desc.count() > 0) {
-    await desc.click();
-    await page.keyboard.type(DESCRIPTION, { delay: 20 });
-    await page.waitForTimeout(600);
-  }
-
-  // 7) Verify before save — sanity check the form actually picked everything up.
-  const pre = await page.evaluate(() => ({
-    title: document.querySelector('input[aria-label="Title"]')?.value,
-    start: document.querySelector('input[aria-label="Start date"]')?.value,
-    end: document.querySelector('input[aria-label="End date"]')?.value,
-    allDay: document.querySelector('input[type="checkbox"][aria-label="All day"]')?.checked,
-  }));
-  console.log('Pre-save:', pre);
-  if (!pre.title || !pre.start || !pre.end || !pre.allDay) {
-    throw new Error('Pre-save check failed; aborting before Save click.');
-  }
-
-  // 8) Save. SELECTOR: button[aria-label="Save"].
-  await page.locator('button[aria-label="Save"]').first().click();
-  await page.waitForTimeout(8000);
-
-  // 9) If guests were added, a "Send invitation emails?" dialog appears with
-  //    "Don't send" / "Send" buttons. With no guests, no prompt. Handle if needed:
-  const dontSend = page.locator('button:has-text("Don\'t send"), button:has-text("Don’t send")').first();
-  if (await dontSend.count() > 0) {
-    await dontSend.click();
-    await page.waitForTimeout(3000);
-  }
-
-  // 10) Verify the event landed by reloading month view and grepping body text.
-  await page.goto('https://calendar.google.com/calendar/u/2/r/month/2026/6/1', { waitUntil: 'domcontentloaded' });
-  await page.waitForTimeout(10_000);
-  const ok = await page.evaluate((t) => document.body.innerText.includes(t), EVENT_TITLE);
-  console.log('Event present on month view:', ok);
-
-  await browser.close();
-})();
-```
-
-### Why this works when "you can't drive Google" is the common wisdom
-
-- **Keyboard shortcut `c`** bypasses the quick-create popup (which has its own selectors and stale-DOM issues) and goes straight to the full editor URL `/calendar/u/<N>/r/eventedit?overrides=[...]`. Fewer clicks = lower bot-score.
-- **Text-input dates**: `Start date` / `End date` are real `<input type="text">` elements; you don't need to fight a date-picker grid.
-- **Single shot**: one event, one save click, done. Don't loop this to create 10 events back-to-back.
-
-### Selector cheatsheet for `/eventedit`
-
-| Field | Selector | Notes |
-|---|---|---|
-| Title | `input[aria-label="Title"]` | placeholder is `"Add title"` but **the aria-label is `Title`** — easy gotcha |
-| All-day toggle | `input[type="checkbox"][aria-label="All day"]` | use `isChecked()` before clicking |
-| Start date | `input[aria-label="Start date"]` | text input, format `"Jun 21, 2026"`, commit with Tab |
-| End date | `input[aria-label="End date"]` | same |
-| Start time | `input[role="combobox"][aria-label="Start time"]` | only present when All-day is OFF |
-| End time | `input[role="combobox"][aria-label="End time"]` | same |
-| Location | `input[role="combobox"][aria-label="Add location"]` | autocomplete combo |
-| Description | `[aria-label="Description"]` | **`<div role="textbox">`, not `<input>`** — use `keyboard.type` after clicking |
-| Calendar color | `button[aria-label="Calendar color, event color"]` | opens color picker |
-| Show as | `[role="combobox"][aria-label="Show as"]` | Busy / Free |
-| Visibility | `[role="combobox"][aria-label="Visibility"]` | Default / Public / Private |
-| Save | `button[aria-label="Save"]` | the commit button |
-| Cancel | `button[aria-label="Cancel event creation"]` | close icon |
-
-### Other write actions (extrapolation, not yet verified)
-
-The same pattern should work for:
-- **Editing an event** — navigate to the event from the month view (click its chip), opens `/eventedit?eid=...` with same selectors
-- **Deleting an event** — open the event, click `<button aria-label="Delete event">`
-- **Adding guests** — `input[role="combobox"][aria-label="Guests"]`, type email, press Enter
-
-When extrapolating, follow the same single-shot discipline. If you need to do this for ~5+ events, install a Calendar MCP server instead.
+CDP-attach to a real Chrome (`chromium.connectOverCDP`) does work, but modern Chrome refuses CDP on the default user-data-dir for security reasons — you'd need to clone your profile into `/tmp/chrome-cdp-profile` first. Not worth the per-machine fragility for a template repo.
 
 ## Cookie set — which ones are load-bearing
 
@@ -347,14 +227,13 @@ Things that will likely break it:
 3. **Mismatched UA / IP geo** — replaying cookies captured in one country, from an IP in a different country, triggers "unusual activity." Mitigation: capture and replay from the same machine, or accept that the session may be invalidated and re-auth in the browser.
 4. **`headless: true` with default flags** — Google's fingerprinting catches headless Chromium reliably. Use `headless: false` or full stealth flags.
 5. **Frequent automated hits** — even with valid cookies, hammering the URL will get the session flagged. Cache results; don't poll faster than once every few minutes.
-6. **High-volume write actions via DOM driving** — risky. Each click adds bot-score. **One** create works fine (see write-recipe above). **Ten in a loop** will likely trip you.
+6. **Any write action via DOM driving** — Google's OSID sync redirects synthetic sessions to `workspace.google.com` marketing page. Even single-shot create reproducibly fails. Use the Calendar API instead.
 
 ## What this skill is NOT for — and what to use instead
 
 | Goal | Wrong tool | Right tool |
 |---|---|---|
-| One-shot create / update / delete event | — | This skill ✓ (write-recipe above) |
-| Bulk event creation (5+) | DOM driving via Playwright (bot risk) | Google Calendar API (OAuth) or a Calendar MCP server |
+| Any create / update / delete event | Cookie replay + DOM | Google Calendar API (OAuth) or a Calendar MCP server |
 | Poll the calendar every minute | This skill | Google Calendar API with `events.watch` push channels |
 | Multi-user backend service | Cookie replay | OAuth per-user with refresh tokens |
 | One-shot "what's on my schedule next week" | — | This skill ✓ |
